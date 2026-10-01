@@ -1,14 +1,14 @@
-const STORAGE_KEY = 'ncc_portal_v1';
+const STORAGE_KEY = 'ncc_army_portal_v2';
 
 const DEFAULT_CONFIG = {
   portalName: 'NCC Army Wing',
   portalSubtitle: 'Anna University Unit Portal',
   users: [
-    { id: 'admin-1', name: 'Admin', role: 'admin', password: 'admin123' },
-    { id: 'senior-1', name: 'Senior Cadet 1', role: 'senior', password: 'senior123' },
-    { id: 'junior-1', name: 'Junior Cadet 1', role: 'junior', password: 'junior123' },
-    { id: 'ano-1', name: 'ANO 1', role: 'ano', password: 'ano123' },
-    { id: 'cadet-1', name: 'Cadet 01', role: 'cadet', password: 'cadet123', regNo: 'TN-01' },
+    { id: 'u-admin', name: 'Admin', role: 'admin', password: 'admin123' },
+    { id: 'u-senior', name: 'Senior Cadet 1', role: 'senior', password: 'senior123' },
+    { id: 'u-junior', name: 'Junior Cadet 1', role: 'junior', password: 'junior123' },
+    { id: 'u-ano', name: 'ANO 1', role: 'ano', password: 'ano123' },
+    { id: 'u-cadet', name: 'Cadet 01', role: 'cadet', password: 'cadet123', regNo: 'TN-01' },
   ],
   colleges: [
     { id: 'ceg', name: 'College of Engineering, Guindy', deanTitle: 'The Dean', platoons: ['Engineers', 'EME'] },
@@ -19,248 +19,144 @@ const DEFAULT_CONFIG = {
     { id: 'ano-2', name: 'ANO 2', collegeId: 'ceg' },
     { id: 'ano-3', name: 'ANO 3', collegeId: 'act' },
   ],
+  templates: [
+    { id: 'od', name: 'OD Letter', group: 'dean', subject: 'OD permission for {event}', body: 'This is to request permission for {event} on {when} at {venue}.\n\nWe request the necessary approval and oblige.' },
+    { id: 'gate', name: 'Gate Opening', group: 'dean', subject: 'Gate opening permission for {event}', body: 'We request permission to open the gate for {event} on {when} at {venue}.\n\nKindly accord permission and oblige.' },
+    { id: 'co-general', name: 'CO Letter', group: 'co', subject: '{event}', body: 'We request your permission for {event} on {when} at {venue}.\n\nKindly consider and oblige.' },
+  ],
   letterheads: {
     common: 'NCC ARMY WING\nAnna University\nTamil Nadu',
     ano: 'NCC ARMY WING\nOffice of the ANO\nAnna University',
     ceg: 'COLLEGE OF ENGINEERING, GUINDY\nAnna University\nTamil Nadu',
     act: 'ALAGAPPA COLLEGE OF TECHNOLOGY\nAnna University\nTamil Nadu',
   },
-  templates: [
-    {
-      id: 'od',
-      name: 'OD Letter',
-      group: 'dean',
-      subject: 'OD permission for {event}',
-      body: 'This is to request permission for {event} on {when} at {venue}.\n\nWe request the necessary approval and oblige.'
-    },
-    {
-      id: 'gate',
-      name: 'Gate Opening',
-      group: 'dean',
-      subject: 'Gate opening permission for {event}',
-      body: 'We request permission to open the gate for {event} on {when} at {venue}.\n\nKindly accord permission and oblige.'
-    },
-    {
-      id: 'co-general',
-      name: 'Commanding Officer Letter',
-      group: 'co',
-      subject: '{event}',
-      body: 'We request your permission for {event} on {when} at {venue}.\n\nKindly consider and oblige.'
-    },
-  ],
-  nrColumns: ['Regt. No', 'Rank', 'Name', 'Department', 'Year', 'Platoon', 'Phone'],
-  attendanceTypes: ['Daily Parade', 'Drill', 'Training class', 'Camp', 'Other'],
+  attendanceTypes: ['Daily parade', 'Drill', 'Training class', 'Camp', 'Other'],
   financeCategories: ['Camp', 'Event', 'Equipment', 'Refreshments', 'Stationery', 'Travel', 'Other'],
-  driveCategories: ['Nominal Roll', 'Letter', 'Signed Copy', 'Bill', 'Certificate', 'Other'],
+  driveCategories: ['Nominal Roll', 'Letter', 'Signed copy', 'Bill', 'Certificate', 'Other'],
   statuses: ['Draft', 'Sent for signature', 'Signed', 'Submitted'],
-  theme: {
-    primary: '#123b7a',
-    accent: '#c2212b',
-  }
+  theme: { primary: '#123b7a', accent: '#c2212b' }
 };
 
-const state = {
+const defaultCadets = [
+  { id: 'c1', regNo: 'TN-01', rank: 'Cadet', name: 'Demo Cadet 1', dept: 'Mechanical', year: 'II', platoon: 'Engineers', phone: '0000000000' },
+  { id: 'c2', regNo: 'TN-02', rank: 'Cadet', name: 'Demo Cadet 2', dept: 'EEE', year: 'II', platoon: 'EME', phone: '0000000001' },
+  { id: 'c3', regNo: 'TN-03', rank: 'Cadet', name: 'Demo Cadet 3', dept: 'CSE', year: 'III', platoon: 'Signals', phone: '0000000002' },
+  { id: 'c4', regNo: 'TN-04', rank: 'Cadet', name: 'Demo Cadet 4', dept: 'ECE', year: 'II', platoon: 'Engineers', phone: '0000000003' },
+];
+
+const appState = {
   currentUser: null,
   currentView: 'dashboard',
+  loginMode: 'staff',
   config: loadConfig(),
   cadets: loadCadets(),
-  nrs: loadData('nrs', []),
-  letters: loadData('letters', []),
-  attendance: loadData('attendance', []),
-  volunteer: loadData('volunteer', []),
-  finance: loadData('finance', []),
-  drive: loadData('drive', []),
-  activity: loadData('activity', []),
+  nrs: readStorage('nrs', []),
+  letters: readStorage('letters', []),
+  attendance: readStorage('attendance', []),
+  volunteer: readStorage('volunteer', []),
+  finance: readStorage('finance', []),
+  drive: readStorage('drive', []),
+  activity: readStorage('activity', []),
 };
 
-function uid(prefix = 'id') {
-  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
-}
-
 function loadConfig() {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (!stored) return structuredClone(DEFAULT_CONFIG);
-
+  const existing = localStorage.getItem(STORAGE_KEY);
+  if (!existing) return structuredClone(DEFAULT_CONFIG);
   try {
-    const parsed = JSON.parse(stored);
+    const parsed = JSON.parse(existing);
     return { ...structuredClone(DEFAULT_CONFIG), ...parsed };
   } catch {
     return structuredClone(DEFAULT_CONFIG);
   }
 }
 
-function saveConfig() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state.config));
+function persistConfig() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(appState.config));
 }
 
 function loadCadets() {
-  const stored = localStorage.getItem(`${STORAGE_KEY}-cadets`);
-  if (!stored) return [
-    { id: 'c1', regNo: 'TN-01', rank: 'Cadet', name: 'Demo Cadet 1', dept: 'Mechanical', year: 'II', platoon: 'Engineers', phone: '0000000000' },
-    { id: 'c2', regNo: 'TN-02', rank: 'Cadet', name: 'Demo Cadet 2', dept: 'EEE', year: 'II', platoon: 'EME', phone: '0000000001' },
-    { id: 'c3', regNo: 'TN-03', rank: 'Cadet', name: 'Demo Cadet 3', dept: 'CSE', year: 'III', platoon: 'Signals', phone: '0000000002' },
-  ];
-  try { return JSON.parse(stored); } catch { return []; }
+  const existing = localStorage.getItem(`${STORAGE_KEY}-cadets`);
+  if (!existing) return structuredClone(defaultCadets);
+  try {
+    return JSON.parse(existing);
+  } catch {
+    return structuredClone(defaultCadets);
+  }
 }
 
-function saveCadets() {
-  localStorage.setItem(`${STORAGE_KEY}-cadets`, JSON.stringify(state.cadets));
+function persistCadets() {
+  localStorage.setItem(`${STORAGE_KEY}-cadets`, JSON.stringify(appState.cadets));
 }
 
-function loadData(key, fallback) {
-  const stored = localStorage.getItem(`${STORAGE_KEY}-${key}`);
-  if (!stored) return fallback;
-  try { return JSON.parse(stored); } catch { return fallback; }
+function readStorage(key, fallback) {
+  const value = localStorage.getItem(`${STORAGE_KEY}-${key}`);
+  if (!value) return structuredClone(fallback);
+  try {
+    return JSON.parse(value);
+  } catch {
+    return structuredClone(fallback);
+  }
 }
 
-function saveData(key, value) {
+function writeStorage(key, value) {
   localStorage.setItem(`${STORAGE_KEY}-${key}`, JSON.stringify(value));
 }
 
-function logActivity(type, text) {
-  state.activity.unshift({
+function uid(prefix = 'id') {
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+}
+
+function fmtMoney(value) {
+  return '₹' + Number(value || 0).toLocaleString('en-IN');
+}
+
+function escapeHtml(str) {
+  return String(str ?? '').replace(/[&<>"']/g, (ch) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[ch]));
+}
+
+function addActivity(type, text) {
+  appState.activity.unshift({
     id: uid('act'),
     type,
     text,
     timestamp: Date.now(),
-    user: state.currentUser ? state.currentUser.name : 'System',
+    user: appState.currentUser ? appState.currentUser.name : 'System',
   });
-  saveData('activity', state.activity);
+  writeStorage('activity', appState.activity);
+}
+
+function currentRoleCan(viewId) {
+  const role = appState.currentUser?.role ?? 'guest';
+  const allowed = {
+    dashboard: ['admin', 'senior', 'junior', 'ano', 'cadet'],
+    nr: ['admin', 'senior', 'junior'],
+    letters: ['admin', 'senior', 'junior'],
+    records: ['admin', 'senior', 'junior', 'ano'],
+    attendance: ['admin', 'senior', 'junior', 'ano', 'cadet'],
+    volunteer: ['admin', 'senior', 'junior', 'cadet'],
+    finance: ['admin', 'senior', 'ano'],
+    drive: ['admin', 'senior', 'junior', 'ano', 'cadet'],
+    cadets: ['admin', 'senior', 'junior', 'ano'],
+    admin: ['admin'],
+  };
+  return allowed[viewId]?.includes(role) ?? false;
 }
 
 function renderApp() {
-  const app = document.getElementById('app');
-
-  if (!state.currentUser) {
-    app.innerHTML = renderLoginScreen();
-    bindLoginEvents();
+  const root = document.getElementById('app');
+  if (!appState.currentUser) {
+    root.innerHTML = renderLogin();
+    bindLoginUI();
     return;
   }
 
-  app.innerHTML = `
-    <header class="topbar">
-      <div class="brand">
-        <div class="brand-mark">
-          <span></span><span></span><span></span>
-        </div>
-        <div>
-          <div>${escapeHtml(state.config.portalName)}</div>
-          <small>${escapeHtml(state.config.portalSubtitle)}</small>
-        </div>
-      </div>
-      <div class="user-box">
-        <span>${escapeHtml(state.currentUser.name)}</span>
-        <span class="role-pill">${state.currentUser.role.toUpperCase()}</span>
-        <button class="ghost" onclick="logout()">Logout</button>
-      </div>
-    </header>
-    <div class="layout">
-      <aside class="sidebar">
-        ${renderNav()}
-      </aside>
-      <main class="content">
-        ${renderCurrentView()}
-      </main>
-    </div>
-  `;
-
-  bindViewActions();
-}
-
-function renderLoginScreen() {
-  return `
-    <div class="login-box">
-      <h2>Login</h2>
-      <div class="switcher">
-        <button class="active" data-role-switch="staff">Staff</button>
-        <button data-role-switch="cadet">Cadet</button>
-      </div>
-      <div id="staff-login-box">
-        <div class="field">
-          <label>User</label>
-          <select id="loginUser">
-            ${state.config.users.filter(u => u.role !== 'cadet').map(u => `<option value="${u.id}">${escapeHtml(u.name)} (${u.role})</option>`).join('')}
-          </select>
-        </div>
-      </div>
-      <div id="cadet-login-box" class="hidden">
-        <div class="field">
-          <label>Regimental No</label>
-          <input id="cadetReg" type="text" placeholder="TN-01" />
-        </div>
-        <div class="field">
-          <label>Cadet Name</label>
-          <input id="cadetName" type="text" placeholder="Name" />
-        </div>
-      </div>
-      <div class="field">
-        <label>Password</label>
-        <input id="loginPassword" type="password" placeholder="Password" />
-      </div>
-      <button class="primary" style="width:100%; margin-top: 10px;" onclick="submitLogin()">Login</button>
-    </div>
-  `;
-}
-
-function bindLoginEvents() {
-  document.querySelectorAll('[data-role-switch]').forEach(btn => {
-    btn.onclick = () => {
-      const mode = btn.getAttribute('data-role-switch');
-      const staffBox = document.getElementById('staff-login-box');
-      const cadetBox = document.getElementById('cadet-login-box');
-
-      if (mode === 'staff') {
-        staffBox.classList.remove('hidden');
-        cadetBox.classList.add('hidden');
-        btn.classList.add('active');
-        btn.parentElement.querySelector('[data-role-switch="cadet"]').classList.remove('active');
-      } else {
-        cadetBox.classList.remove('hidden');
-        staffBox.classList.add('hidden');
-        btn.classList.add('active');
-        btn.parentElement.querySelector('[data-role-switch="staff"]').classList.remove('active');
-      }
-    };
-  });
-}
-
-function submitLogin() {
-  const staffMode = !document.getElementById('cadet-login-box').classList.contains('hidden');
-  const password = document.getElementById('loginPassword').value;
-
-  if (staffMode) {
-    const id = document.getElementById('loginUser').value;
-    const user = state.config.users.find(u => u.id === id);
-
-    if (user && user.password === password) {
-      state.currentUser = user;
-      renderApp();
-      return;
-    }
-  } else {
-    const regNo = document.getElementById('cadetReg').value.trim();
-    const name = document.getElementById('cadetName').value.trim();
-    const cadet = state.cadets.find(c => c.regNo === regNo && c.name.toLowerCase() === name.toLowerCase());
-    const user = state.config.users.find(u => u.role === 'cadet' && u.regNo === regNo && u.name === name);
-
-    if (cadet && user && user.password === password) {
-      state.currentUser = user;
-      state.currentUser.cadetId = cadet.id;
-      renderApp();
-      return;
-    }
-  }
-
-  alert('Invalid login');
-}
-
-function logout() {
-  state.currentUser = null;
-  renderApp();
-}
-
-function renderNav() {
-  const nav = [
+  const navItems = [
     { id: 'dashboard', label: 'Dashboard' },
     { id: 'nr', label: 'Create NR' },
     { id: 'letters', label: 'Letters' },
@@ -271,89 +167,225 @@ function renderNav() {
     { id: 'drive', label: 'Drive' },
     { id: 'cadets', label: 'Cadets' },
     { id: 'admin', label: 'Admin' },
-  ];
+  ].filter(item => currentRoleCan(item.id));
 
-  return nav.map(item => {
-    const role = state.currentUser.role;
-    if ((role === 'cadet' && ['admin', 'cadets'].includes(item.id)) || (role === 'ano' && ['admin', 'nr', 'letters', 'finance'].includes(item.id))) {
-      return '';
+  root.innerHTML = `
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark"><span></span><span></span><span></span></div>
+        <div>
+          <div class="brand-title">${escapeHtml(appState.config.portalName)}</div>
+          <small>${escapeHtml(appState.config.portalSubtitle)}</small>
+        </div>
+      </div>
+      <div class="user-meta">
+        <span>${escapeHtml(appState.currentUser.name)}</span>
+        <span class="role-pill">${escapeHtml(appState.currentUser.role.toUpperCase())}</span>
+        <button class="ghost" onclick="logout()">Logout</button>
+      </div>
+    </header>
+    <div class="layout">
+      <aside class="sidebar">
+        ${navItems.map(item => `
+          <button class="nav-btn ${appState.currentView === item.id ? 'active' : ''}" data-nav="${item.id}">${escapeHtml(item.label)}</button>
+        `).join('')}
+      </aside>
+      <main class="content">
+        ${renderCurrentView()}
+      </main>
+    </div>
+  `;
+
+  bindNav();
+}
+
+function renderLogin() {
+  const staffUsers = appState.config.users.filter(u => u.role !== 'cadet');
+  return `
+    <div class="login-shell">
+      <div class="login-box">
+        <div class="login-header">
+          <div class="brand-mark large"><span></span><span></span><span></span></div>
+          <div>
+            <h2>${escapeHtml(appState.config.portalName)}</h2>
+            <small>${escapeHtml(appState.config.portalSubtitle)}</small>
+          </div>
+        </div>
+
+        <div class="segmented">
+          <button class="segment ${appState.loginMode === 'staff' ? 'active' : ''}" data-mode="staff">Staff / ANO</button>
+          <button class="segment ${appState.loginMode === 'cadet' ? 'active' : ''}" data-mode="cadet">Cadet</button>
+        </div>
+
+        <div id="staff-login" class="login-panel ${appState.loginMode === 'staff' ? '' : 'hidden'}">
+          <div class="field">
+            <label>Login as</label>
+            <select id="staffUser">
+              ${staffUsers.map(u => `<option value="${u.id}">${escapeHtml(u.name)} (${escapeHtml(u.role)})</option>`).join('')}
+            </select>
+          </div>
+        </div>
+
+        <div id="cadet-login" class="login-panel ${appState.loginMode === 'cadet' ? '' : 'hidden'}">
+          <div class="field">
+            <label>Regimental No</label>
+            <input id="cadetReg" type="text" placeholder="TN-01" />
+          </div>
+          <div class="field">
+            <label>Cadet Name</label>
+            <input id="cadetName" type="text" placeholder="Cadet Name" />
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Password</label>
+          <input id="loginPassword" type="password" placeholder="Password" />
+        </div>
+
+        <button class="primary wide" onclick="submitLogin()">Login</button>
+      </div>
+    </div>
+  `;
+}
+
+function bindLoginUI() {
+  document.querySelectorAll('[data-mode]').forEach(button => {
+    button.addEventListener('click', () => {
+      appState.loginMode = button.dataset.mode;
+      renderApp();
+    });
+  });
+}
+
+function submitLogin() {
+  const pass = document.getElementById('loginPassword').value;
+
+  if (appState.loginMode === 'staff') {
+    const selectedUserId = document.getElementById('staffUser').value;
+    const user = appState.config.users.find(u => u.id === selectedUserId);
+    if (user && user.password === pass) {
+      appState.currentUser = user;
+      renderApp();
+      return;
     }
+  } else {
+    const regNo = document.getElementById('cadetReg').value.trim();
+    const name = document.getElementById('cadetName').value.trim();
+    const user = appState.config.users.find(u => u.role === 'cadet' && u.regNo === regNo && u.name === name);
+    const cadet = appState.cadets.find(c => c.regNo === regNo && c.name.toLowerCase() === name.toLowerCase());
+    if (user && cadet && user.password === pass) {
+      appState.currentUser = user;
+      appState.currentUser.cadetId = cadet.id;
+      renderApp();
+      return;
+    }
+  }
 
-    return `<button class="nav-btn ${state.currentView === item.id ? 'active' : ''}" data-nav="${item.id}">${item.label}</button>`;
-  }).join('');
+  alert('Invalid user or password');
+}
+
+function logout() {
+  appState.currentUser = null;
+  renderApp();
+}
+
+function bindNav() {
+  document.querySelectorAll('[data-nav]').forEach(button => {
+    button.addEventListener('click', () => {
+      appState.currentView = button.dataset.nav;
+      renderApp();
+    });
+  });
 }
 
 function renderCurrentView() {
-  switch (state.currentView) {
-    case 'dashboard': return renderDashboard();
-    case 'nr': return renderNR();
-    case 'letters': return renderLetters();
-    case 'records': return renderRecords();
-    case 'attendance': return renderAttendance();
-    case 'volunteer': return renderVolunteer();
-    case 'finance': return renderFinance();
-    case 'drive': return renderDrive();
-    case 'cadets': return renderCadets();
-    case 'admin': return renderAdmin();
-    default: return renderDashboard();
-  }
+  if (!appState.currentUser) return '';
+
+  const map = {
+    dashboard: renderDashboard,
+    nr: renderNR,
+    letters: renderLetters,
+    records: renderRecords,
+    attendance: renderAttendance,
+    volunteer: renderVolunteer,
+    finance: renderFinance,
+    drive: renderDrive,
+    cadets: renderCadets,
+    admin: renderAdmin,
+  };
+
+  return (map[appState.currentView] || renderDashboard)();
 }
 
 function renderDashboard() {
-  const role = state.currentUser.role;
-  let cards = [];
-
-  if (role === 'cadet') {
-    cards = [
+  const role = appState.currentUser.role;
+  const cards = (() => {
+    if (role === 'admin') {
+      return [
+        { label: 'Cadets', value: appState.cadets.length },
+        { label: 'NRs', value: appState.nrs.length },
+        { label: 'Letters', value: appState.letters.length },
+        { label: 'Finance Balance', value: fmtMoney(getFinanceBalance()) },
+      ];
+    }
+    if (role === 'senior') {
+      return [
+        { label: 'Cadets', value: appState.cadets.length },
+        { label: 'Junior Records', value: appState.nrs.length + appState.letters.length },
+        { label: 'Volunteer Entries', value: appState.volunteer.length },
+        { label: 'Attendance Sessions', value: appState.attendance.length },
+      ];
+    }
+    if (role === 'junior') {
+      return [
+        { label: 'My NRs', value: appState.nrs.filter(n => n.createdBy === appState.currentUser.name).length },
+        { label: 'My Letters', value: appState.letters.filter(l => l.createdBy === appState.currentUser.name).length },
+        { label: 'Volunteer', value: appState.volunteer.filter(v => v.userId === appState.currentUser.id).length },
+        { label: 'Files', value: appState.drive.filter(d => d.uploadedBy === appState.currentUser.name).length },
+      ];
+    }
+    if (role === 'ano') {
+      return [
+        { label: 'Attendance %', value: '87%' },
+        { label: 'NRs', value: appState.nrs.length },
+        { label: 'Letters', value: appState.letters.length },
+        { label: 'Finance Balance', value: fmtMoney(getFinanceBalance()) },
+      ];
+    }
+    return [
       { label: 'Attendance', value: '92%' },
-      { label: 'Volunteer Hours', value: '14.5h' },
-      { label: 'Docs Uploaded', value: '4' },
+      { label: 'Volunteer Hours', value: totalVolunteerHoursForUser(appState.currentUser.id) + 'h' },
+      { label: 'Uploaded Files', value: appState.drive.filter(f => f.uploadedBy === appState.currentUser.name).length },
+      { label: 'My Records', value: appState.nrs.filter(n => n.createdBy === appState.currentUser.name).length + appState.letters.filter(l => l.createdBy === appState.currentUser.name).length },
     ];
-  } else if (role === 'junior') {
-    cards = [
-      { label: 'NR Created', value: String(state.nrs.length) },
-      { label: 'Letters', value: String(state.letters.length) },
-      { label: 'Volunteer Entries', value: String(state.volunteer.filter(v => v.userId === state.currentUser.id).length) },
-      { label: 'Attendance', value: '85%' },
-    ];
-  } else if (role === 'senior' || role === 'admin') {
-    cards = [
-      { label: 'Cadets', value: String(state.cadets.length) },
-      { label: 'NRs', value: String(state.nrs.length) },
-      { label: 'Letters', value: String(state.letters.length) },
-      { label: 'Finance', value: '₹' + getFinanceBalance() },
-    ];
-  } else if (role === 'ano') {
-    cards = [
-      { label: 'Attendance %', value: '87%' },
-      { label: 'NRs', value: String(state.nrs.length) },
-      { label: 'Letters', value: String(state.letters.length) },
-      { label: 'Balance', value: '₹' + getFinanceBalance() },
-    ];
-  }
+  })();
+
+  const recent = appState.activity.slice(0, 8);
 
   return `
     <div class="card">
-      <h2>Welcome, ${escapeHtml(state.currentUser.name)}</h2>
-      <p class="muted">${escapeHtml(state.config.portalName)} dashboard for ${role.toUpperCase()} role.</p>
+      <h2>Welcome, ${escapeHtml(appState.currentUser.name)}</h2>
+      <p class="muted">${escapeHtml(appState.config.portalName)} dashboard for ${escapeHtml(role.toUpperCase())} role.</p>
     </div>
-    <div class="grid">
-      ${cards.map(c => `
-        <div class="stat">
-          <div class="stat-value">${escapeHtml(c.value)}</div>
-          <div>${escapeHtml(c.label)}</div>
+    <div class="grid three">
+      ${cards.map(card => `
+        <div class="stat-box">
+          <div class="stat-value">${escapeHtml(String(card.value))}</div>
+          <div class="stat-label">${escapeHtml(card.label)}</div>
         </div>
       `).join('')}
     </div>
     <div class="card">
       <h3>Recent Activity</h3>
-      ${state.activity.length ? state.activity.slice(0, 6).map(item => `
-        <div class="row" style="margin-bottom: 8px; justify-content: space-between;">
-          <span>${escapeHtml(item.user)}</span>
-          <span class="muted">${new Date(item.timestamp).toLocaleString()}</span>
+      ${recent.length ? recent.map(item => `
+        <div class="activity-item">
+          <div class="activity-header">
+            <strong>${escapeHtml(item.user)}</strong>
+            <span>${new Date(item.timestamp).toLocaleString()}</span>
+          </div>
+          <div>${escapeHtml(item.type)}: ${escapeHtml(item.text)}</div>
         </div>
-        <div>${escapeHtml(item.type)}: ${escapeHtml(item.text)}</div>
-      `).join('<hr>') : '<p class="muted">No recent activity.</p>'}
+      `).join('') : '<p class="muted">No recent activity.</p>'}
     </div>
   `;
 }
@@ -362,36 +394,36 @@ function renderNR() {
   return `
     <div class="card">
       <h2>Create Nominal Roll</h2>
-      <div class="col-2">
-        <div>
+      <div class="two-col">
+        <div class="field">
           <label>Event Type</label>
           <select id="nrType">
             <option>Camp</option>
             <option>Other</option>
           </select>
         </div>
-        <div>
+        <div class="field">
           <label>Event Name</label>
           <input id="nrName" type="text" placeholder="Annual Training Camp" />
         </div>
-        <div>
+        <div class="field">
           <label>Venue</label>
           <input id="nrVenue" type="text" placeholder="Venue" />
         </div>
-        <div>
+        <div class="field">
           <label>From Date</label>
           <input id="nrFrom" type="date" />
         </div>
-        <div>
+        <div class="field">
           <label>To Date</label>
           <input id="nrTo" type="date" />
         </div>
-        <div>
+        <div class="field">
           <label>Reporting Time</label>
           <input id="nrTime" type="time" />
         </div>
       </div>
-      <div style="margin-top: 18px;">
+      <div class="actions-row">
         <button class="primary" onclick="createNR()">Create NR</button>
       </div>
     </div>
@@ -402,50 +434,47 @@ function createNR() {
   const payload = {
     id: uid('nr'),
     type: document.getElementById('nrType').value,
-    name: document.getElementById('nrName').value || 'New Event',
+    name: document.getElementById('nrName').value || 'New event',
     venue: document.getElementById('nrVenue').value,
     from: document.getElementById('nrFrom').value,
     to: document.getElementById('nrTo').value,
     time: document.getElementById('nrTime').value,
     status: 'Draft',
-    createdBy: state.currentUser.name,
+    createdBy: appState.currentUser.name,
     createdAt: Date.now(),
-    rows: state.cadets.slice(0, 5).map(c => ({ ...c }))
+    rows: appState.cadets.slice(0, 5).map(c => ({ ...c })),
   };
 
-  state.nrs.unshift(payload);
-  saveData('nrs', state.nrs);
-  logActivity('NR', `Created NR for ${payload.name}`);
+  appState.nrs.unshift(payload);
+  writeStorage('nrs', appState.nrs);
+  addActivity('NR', `Created NR for ${payload.name}`);
   renderApp();
 }
 
 function renderLetters() {
-  const templateOptions = state.config.templates.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
-
+  const templates = appState.config.templates.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
   return `
     <div class="card">
       <h2>Letters</h2>
-      <div class="col-2">
-        <div>
+      <div class="two-col">
+        <div class="field">
           <label>Template</label>
-          <select id="letterTemplate">
-            ${templateOptions}
-          </select>
+          <select id="letterTemplate">${templates}</select>
         </div>
-        <div>
+        <div class="field">
           <label>Event Name</label>
           <input id="letterEvent" type="text" placeholder="Camp or event" />
         </div>
-        <div>
+        <div class="field">
           <label>Date</label>
           <input id="letterDate" type="date" />
         </div>
-        <div>
+        <div class="field">
           <label>Venue</label>
           <input id="letterVenue" type="text" placeholder="Venue" />
         </div>
       </div>
-      <div style="margin-top: 18px;">
+      <div class="actions-row">
         <button class="primary" onclick="saveLetter()">Save Letter</button>
       </div>
     </div>
@@ -454,7 +483,7 @@ function renderLetters() {
 
 function saveLetter() {
   const templateId = document.getElementById('letterTemplate').value;
-  const template = state.config.templates.find(t => t.id === templateId);
+  const template = appState.config.templates.find(t => t.id === templateId);
   const payload = {
     id: uid('letter'),
     templateId,
@@ -463,18 +492,18 @@ function saveLetter() {
     date: document.getElementById('letterDate').value || new Date().toISOString().slice(0, 10),
     venue: document.getElementById('letterVenue').value || 'N/A',
     status: 'Draft',
-    createdBy: state.currentUser.name,
+    createdBy: appState.currentUser.name,
     createdAt: Date.now(),
   };
 
-  state.letters.unshift(payload);
-  saveData('letters', state.letters);
-  logActivity('Letter', `Created ${payload.name} for ${payload.event}`);
+  appState.letters.unshift(payload);
+  writeStorage('letters', appState.letters);
+  addActivity('Letter', `Created ${payload.name} for ${payload.event}`);
   renderApp();
 }
 
 function renderRecords() {
-  const allRecords = [...state.nrs.map(r => ({ ...r, kind: 'NR' })), ...state.letters.map(r => ({ ...r, kind: 'Letter' }))]
+  const all = [...appState.nrs.map(n => ({ ...n, type: 'NR' })), ...appState.letters.map(l => ({ ...l, type: 'Letter' }))]
     .sort((a, b) => b.createdAt - a.createdAt);
 
   return `
@@ -488,17 +517,17 @@ function renderRecords() {
               <th>Name</th>
               <th>Status</th>
               <th>Created By</th>
-              <th>Actions</th>
+              <th>Delete</th>
             </tr>
           </thead>
           <tbody>
-            ${allRecords.length ? allRecords.map(r => `
+            ${all.length ? all.map(item => `
               <tr>
-                <td>${escapeHtml(r.kind)}</td>
-                <td>${escapeHtml(r.name || r.event)}</td>
-                <td><span class="badge ${r.status === 'Draft' ? 'warn' : r.status === 'Signed' || r.status === 'Submitted' ? '' : 'warn'}">${escapeHtml(r.status)}</span></td>
-                <td>${escapeHtml(r.createdBy)}</td>
-                <td><button class="ghost" onclick="deleteRecord('${r.id}', '${r.kind}')">Delete</button></td>
+                <td>${escapeHtml(item.type)}</td>
+                <td>${escapeHtml(item.name || item.event)}</td>
+                <td><span class="badge ${item.status === 'Draft' ? 'warn' : ''}">${escapeHtml(item.status)}</span></td>
+                <td>${escapeHtml(item.createdBy)}</td>
+                <td><button class="danger small" onclick="deleteRecord('${item.type}','${item.id}')">Delete</button></td>
               </tr>
             `).join('') : '<tr><td colspan="5">No records yet.</td></tr>'}
           </tbody>
@@ -508,15 +537,15 @@ function renderRecords() {
   `;
 }
 
-function deleteRecord(id, kind) {
+function deleteRecord(kind, id) {
   if (kind === 'NR') {
-    state.nrs = state.nrs.filter(item => item.id !== id);
-    saveData('nrs', state.nrs);
+    appState.nrs = appState.nrs.filter(n => n.id !== id);
+    writeStorage('nrs', appState.nrs);
   } else {
-    state.letters = state.letters.filter(item => item.id !== id);
-    saveData('letters', state.letters);
+    appState.letters = appState.letters.filter(l => l.id !== id);
+    writeStorage('letters', appState.letters);
   }
-
+  addActivity('Record', `Deleted ${kind} record`);
   renderApp();
 }
 
@@ -524,19 +553,19 @@ function renderAttendance() {
   return `
     <div class="card">
       <h2>Attendance</h2>
-      <div class="col-2">
-        <div>
+      <div class="two-col">
+        <div class="field">
           <label>Date</label>
           <input id="attendanceDate" type="date" value="${new Date().toISOString().slice(0, 10)}" />
         </div>
-        <div>
+        <div class="field">
           <label>Session Type</label>
           <select id="attendanceType">
-            ${state.config.attendanceTypes.map(v => `<option>${escapeHtml(v)}</option>`).join('')}
+            ${appState.config.attendanceTypes.map(type => `<option>${escapeHtml(type)}</option>`).join('')}
           </select>
         </div>
       </div>
-      <div style="margin-top: 18px;">
+      <div class="actions-row">
         <button class="primary" onclick="saveAttendance()">Save Attendance</button>
       </div>
     </div>
@@ -544,24 +573,18 @@ function renderAttendance() {
 }
 
 function saveAttendance() {
-  const date = document.getElementById('attendanceDate').value;
-  const type = document.getElementById('attendanceType').value;
-
   const payload = {
     id: uid('attendance'),
-    date,
-    type,
-    createdBy: state.currentUser.name,
+    date: document.getElementById('attendanceDate').value,
+    type: document.getElementById('attendanceType').value,
+    createdBy: appState.currentUser.name,
     createdAt: Date.now(),
-    records: state.cadets.reduce((acc, cadet) => {
-      acc[cadet.id] = 'P';
-      return acc;
-    }, {}),
+    records: Object.fromEntries(appState.cadets.map(c => [c.id, 'P'])),
   };
 
-  state.attendance.unshift(payload);
-  saveData('attendance', state.attendance);
-  logActivity('Attendance', `Saved ${type} for ${date}`);
+  appState.attendance.unshift(payload);
+  writeStorage('attendance', appState.attendance);
+  addActivity('Attendance', `Saved ${payload.type} for ${payload.date}`);
   renderApp();
 }
 
@@ -569,26 +592,26 @@ function renderVolunteer() {
   return `
     <div class="card">
       <h2>Volunteer Work</h2>
-      <div class="col-2">
-        <div>
+      <div class="two-col">
+        <div class="field">
           <label>Activity</label>
           <input id="volunteerEvent" type="text" placeholder="Event / Activity" />
         </div>
-        <div>
+        <div class="field">
           <label>Date</label>
           <input id="volunteerDate" type="date" value="${new Date().toISOString().slice(0, 10)}" />
         </div>
-        <div>
+        <div class="field">
           <label>Hours</label>
-          <input id="volunteerHours" type="number" min="1" value="1" />
+          <input id="volunteerHours" type="number" min="0" value="1" />
         </div>
-        <div>
+        <div class="field">
           <label>Role</label>
           <input id="volunteerRole" type="text" placeholder="Role / duty" />
         </div>
       </div>
-      <div style="margin-top: 18px;">
-        <button class="primary" onclick="saveVolunteer()">Add Volunteer Work</button>
+      <div class="actions-row">
+        <button class="primary" onclick="saveVolunteer()">Add Volunteer</button>
       </div>
     </div>
   `;
@@ -599,53 +622,58 @@ function saveVolunteer() {
     id: uid('volunteer'),
     event: document.getElementById('volunteerEvent').value || 'General activity',
     date: document.getElementById('volunteerDate').value,
-    hours: Number(document.getElementById('volunteerHours').value || 1),
+    hours: Number(document.getElementById('volunteerHours').value || 0),
     role: document.getElementById('volunteerRole').value || 'Volunteer',
-    userId: state.currentUser.id,
-    userName: state.currentUser.name,
+    userId: appState.currentUser.id,
+    userName: appState.currentUser.name,
     verified: false,
+    createdAt: Date.now(),
   };
 
-  state.volunteer.unshift(entry);
-  saveData('volunteer', state.volunteer);
-  logActivity('Volunteer', `${entry.event} logged by ${entry.userName}`);
+  appState.volunteer.unshift(entry);
+  writeStorage('volunteer', appState.volunteer);
+  addActivity('Volunteer', `${entry.event} logged by ${entry.userName}`);
   renderApp();
+}
+
+function totalVolunteerHoursForUser(userId) {
+  return appState.volunteer.filter(v => v.userId === userId).reduce((sum, item) => sum + Number(item.hours || 0), 0);
 }
 
 function renderFinance() {
   return `
     <div class="card">
       <h2>Finance</h2>
-      <div class="grid">
-        <div class="stat">
-          <div class="stat-value">₹${getFinanceBalance()}</div>
-          <div>Balance</div>
+      <div class="grid three small-gap">
+        <div class="stat-box">
+          <div class="stat-value">${fmtMoney(getFinanceBalance())}</div>
+          <div class="stat-label">Balance</div>
         </div>
       </div>
-      <div class="col-2" style="margin-top: 18px;">
-        <div>
+      <div class="two-col" style="margin-top:16px;">
+        <div class="field">
           <label>Type</label>
           <select id="financeType">
             <option value="in">Money Received</option>
             <option value="out">Money Spent</option>
           </select>
         </div>
-        <div>
+        <div class="field">
           <label>Category</label>
           <select id="financeCategory">
-            ${state.config.financeCategories.map(v => `<option>${escapeHtml(v)}</option>`).join('')}
+            ${appState.config.financeCategories.map(cat => `<option>${escapeHtml(cat)}</option>`).join('')}
           </select>
         </div>
-        <div>
+        <div class="field">
           <label>Amount</label>
           <input id="financeAmount" type="number" min="0" value="0" />
         </div>
-        <div>
+        <div class="field">
           <label>Reference / Bill</label>
           <input id="financeRef" type="text" placeholder="Bill no or reference" />
         </div>
       </div>
-      <div style="margin-top: 18px;">
+      <div class="actions-row">
         <button class="primary" onclick="saveFinance()">Add Entry</button>
       </div>
     </div>
@@ -653,9 +681,9 @@ function renderFinance() {
 }
 
 function getFinanceBalance() {
-  const income = state.finance.filter(item => item.type === 'in').reduce((sum, item) => sum + Number(item.amount || 0), 0);
-  const expense = state.finance.filter(item => item.type === 'out').reduce((sum, item) => sum + Number(item.amount || 0), 0);
-  return Math.max(0, income - expense);
+  const income = appState.finance.filter(f => f.type === 'in').reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const expense = appState.finance.filter(f => f.type === 'out').reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  return income - expense;
 }
 
 function saveFinance() {
@@ -665,13 +693,13 @@ function saveFinance() {
     category: document.getElementById('financeCategory').value,
     amount: Number(document.getElementById('financeAmount').value || 0),
     reference: document.getElementById('financeRef').value || 'N/A',
-    createdBy: state.currentUser.name,
+    createdBy: appState.currentUser.name,
     createdAt: Date.now(),
   };
 
-  state.finance.unshift(entry);
-  saveData('finance', state.finance);
-  logActivity('Finance', `Finance entry: ${entry.category} ${entry.amount}`);
+  appState.finance.unshift(entry);
+  writeStorage('finance', appState.finance);
+  addActivity('Finance', `Saved ${entry.category} entry ${fmtMoney(entry.amount)}`);
   renderApp();
 }
 
@@ -679,19 +707,19 @@ function renderDrive() {
   return `
     <div class="card">
       <h2>Drive</h2>
-      <div class="col-2">
-        <div>
+      <div class="two-col">
+        <div class="field">
           <label>Title</label>
           <input id="driveTitle" type="text" placeholder="Document title" />
         </div>
-        <div>
+        <div class="field">
           <label>Category</label>
           <select id="driveCategory">
-            ${state.config.driveCategories.map(v => `<option>${escapeHtml(v)}</option>`).join('')}
+            ${appState.config.driveCategories.map(c => `<option>${escapeHtml(c)}</option>`).join('')}
           </select>
         </div>
       </div>
-      <div style="margin-top: 18px;">
+      <div class="actions-row">
         <button class="primary" onclick="saveDrive()">Add Document</button>
       </div>
     </div>
@@ -701,15 +729,15 @@ function renderDrive() {
 function saveDrive() {
   const item = {
     id: uid('drive'),
-    title: document.getElementById('driveTitle').value || 'Document',
+    title: document.getElementById('driveTitle').value || 'Untitled document',
     category: document.getElementById('driveCategory').value,
-    uploadedBy: state.currentUser.name,
+    uploadedBy: appState.currentUser.name,
     createdAt: Date.now(),
   };
 
-  state.drive.unshift(item);
-  saveData('drive', state.drive);
-  logActivity('Drive', `Uploaded ${item.title}`);
+  appState.drive.unshift(item);
+  writeStorage('drive', appState.drive);
+  addActivity('Drive', `Uploaded ${item.title}`);
   renderApp();
 }
 
@@ -731,7 +759,7 @@ function renderCadets() {
             </tr>
           </thead>
           <tbody>
-            ${state.cadets.map(c => `
+            ${appState.cadets.length ? appState.cadets.map(c => `
               <tr>
                 <td>${escapeHtml(c.regNo)}</td>
                 <td>${escapeHtml(c.rank)}</td>
@@ -741,7 +769,7 @@ function renderCadets() {
                 <td>${escapeHtml(c.platoon)}</td>
                 <td>${escapeHtml(c.phone)}</td>
               </tr>
-            `).join('')}
+            `).join('') : '<tr><td colspan="7">No cadets yet.</td></tr>'}
           </tbody>
         </table>
       </div>
@@ -753,91 +781,163 @@ function renderAdmin() {
   return `
     <div class="card">
       <h2>Admin Settings</h2>
-      <div class="admin-editor-box">
-        <h3>Portal Details</h3>
-        <div class="col-2">
-          <div>
+
+      <div class="admin-box">
+        <h3>Portal</h3>
+        <div class="two-col">
+          <div class="field">
             <label>Portal Name</label>
-            <input id="portalName" type="text" value="${escapeHtml(state.config.portalName)}" />
+            <input id="portalName" type="text" value="${escapeHtml(appState.config.portalName)}" />
           </div>
-          <div>
+          <div class="field">
             <label>Portal Subtitle</label>
-            <input id="portalSubtitle" type="text" value="${escapeHtml(state.config.portalSubtitle)}" />
+            <input id="portalSubtitle" type="text" value="${escapeHtml(appState.config.portalSubtitle)}" />
           </div>
         </div>
       </div>
 
-      <div class="admin-editor-box">
+      <div class="admin-box">
         <h3>Colleges</h3>
-        ${state.config.colleges.map(college => `
-          <div class="col-2" style="margin-bottom: 10px;">
-            <div>
+        ${appState.config.colleges.map(college => `
+          <div class="inline-grid">
+            <div class="field">
               <label>College Name</label>
-              <input value="${escapeHtml(college.name)}" data-edit-college-name="${college.id}" />
+              <input data-college-name="${escapeHtml(college.id)}" value="${escapeHtml(college.name)}" />
             </div>
-            <div>
+            <div class="field">
               <label>Dean Title</label>
-              <input value="${escapeHtml(college.deanTitle)}" data-edit-college-dean="${college.id}" />
+              <input data-college-dean="${escapeHtml(college.id)}" value="${escapeHtml(college.deanTitle)}" />
             </div>
           </div>
         `).join('')}
       </div>
 
-      <div class="admin-editor-box">
-        <h3>Letter Templates</h3>
-        ${state.config.templates.map(t => `
-          <div style="margin-bottom: 10px; border-bottom: 1px solid var(--line); padding-bottom: 8px;">
-            <strong>${escapeHtml(t.name)}</strong>
-            <p class="muted small">${escapeHtml(t.subject)}</p>
-          </div>
-        `).join('')}
+      <div class="admin-box">
+        <h3>Users</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Role</th>
+                <th>Password</th>
+                <th>Delete</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${appState.config.users.map(user => `
+                <tr>
+                  <td>${escapeHtml(user.name)}</td>
+                  <td>${escapeHtml(user.role)}</td>
+                  <td>${escapeHtml(user.password || '')}</td>
+                  <td><button class="danger small" onclick="deleteUser('${user.id}')">Delete</button></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+        <div class="actions-row">
+          <button class="primary" onclick="addDemoUser()">Add Demo User</button>
+        </div>
       </div>
 
-      <div style="margin-top: 18px;">
-        <button class="primary" onclick="saveAdminSettings()">Save Admin Settings</button>
+      <div class="admin-box">
+        <h3>Templates</h3>
+        <ul class="template-list">
+          ${appState.config.templates.map(t => `<li>${escapeHtml(t.name)} — ${escapeHtml(t.group)}</li>`).join('')}
+        </ul>
+      </div>
+
+      <div class="actions-row">
+        <button class="primary" onclick="saveAdminSettings()">Save Settings</button>
       </div>
     </div>
   `;
 }
 
-function saveAdminSettings() {
-  state.config.portalName = document.getElementById('portalName').value || 'NCC Army Wing';
-  state.config.portalSubtitle = document.getElementById('portalSubtitle').value || 'Anna University Unit Portal';
-
-  document.querySelectorAll('[data-edit-college-name]').forEach(input => {
-    const id = input.getAttribute('data-edit-college-name');
-    const college = state.config.colleges.find(c => c.id === id);
-    if (college) college.name = input.value;
-  });
-
-  document.querySelectorAll('[data-edit-college-dean]').forEach(input => {
-    const id = input.getAttribute('data-edit-college-dean');
-    const college = state.config.colleges.find(c => c.id === id);
-    if (college) college.deanTitle = input.value;
-  });
-
-  saveConfig();
-  logActivity('Admin', 'Updated portal admin settings');
+function deleteUser(id) {
+  appState.config.users = appState.config.users.filter(u => u.id !== id);
+  persistConfig();
   renderApp();
 }
 
-function bindViewActions() {
-  document.querySelectorAll('[data-nav]').forEach(btn => {
-    btn.onclick = () => {
-      state.currentView = btn.getAttribute('data-nav');
-      renderApp();
-    };
+function addDemoUser() {
+  const name = prompt('User name?', 'New User');
+  if (!name) return;
+  const role = prompt('Role (admin/senior/junior/ano/cadet)?', 'junior');
+  if (!role) return;
+  const password = prompt('Password?', '123456');
+  if (!password) return;
+
+  appState.config.users.push({
+    id: uid('u'),
+    name,
+    role,
+    password,
+    regNo: role === 'cadet' ? 'TN-' + (appState.cadets.length + 1).toString().padStart(2, '0') : undefined,
   });
+
+  persistConfig();
+  renderApp();
 }
 
-function escapeHtml(str) {
-  return String(str ?? '').replace(/[&<>"']/g, ch => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;'
-  }[ch]));
+function saveAdminSettings() {
+  const portalName = document.getElementById('portalName').value.trim() || 'NCC Army Wing';
+  const portalSubtitle = document.getElementById('portalSubtitle').value.trim() || 'Anna University Unit Portal';
+  appState.config.portalName = portalName;
+  appState.config.portalSubtitle = portalSubtitle;
+
+  document.querySelectorAll('[data-college-name]').forEach(input => {
+    const id = input.getAttribute('data-college-name');
+    const college = appState.config.colleges.find(c => c.id === id);
+    if (college) college.name = input.value.trim() || college.name;
+  });
+
+  document.querySelectorAll('[data-college-dean]').forEach(input => {
+    const id = input.getAttribute('data-college-dean');
+    const college = appState.config.colleges.find(c => c.id === id);
+    if (college) college.deanTitle = input.value.trim() || college.deanTitle;
+  });
+
+  persistConfig();
+  addActivity('Admin', 'Updated portal settings');
+  renderApp();
 }
+
+function exportSettings() {
+  const payload = {
+    config: appState.config,
+    cadets: appState.cadets,
+    nrs: appState.nrs,
+    letters: appState.letters,
+    attendance: appState.attendance,
+    volunteer: appState.volunteer,
+    finance: appState.finance,
+    drive: appState.drive,
+    activity: appState.activity,
+  };
+
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'ncc-army-portal-backup.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+window.exportSettings = exportSettings;
+window.logout = logout;
+window.submitLogin = submitLogin;
+window.createNR = createNR;
+window.saveLetter = saveLetter;
+window.deleteRecord = deleteRecord;
+window.saveAttendance = saveAttendance;
+window.saveVolunteer = saveVolunteer;
+window.saveFinance = saveFinance;
+window.saveDrive = saveDrive;
+window.saveAdminSettings = saveAdminSettings;
+window.deleteUser = deleteUser;
+window.addDemoUser = addDemoUser;
 
 renderApp();
