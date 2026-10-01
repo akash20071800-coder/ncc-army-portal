@@ -3,7 +3,6 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
-const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { Client } = require('pg');
 
@@ -57,36 +56,133 @@ const DEFAULT_DATA = {
   }
 };
 
-const safeRead = () => {
+function ensureDataFile() {
   if (!fs.existsSync(DATA_FILE)) {
     fs.writeFileSync(DATA_FILE, JSON.stringify(DEFAULT_DATA, null, 2));
-    return structuredClone(DEFAULT_DATA);
   }
+}
 
+function readDataStore() {
+  ensureDataFile();
   try {
-    return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+    const raw = fs.readFileSync(DATA_FILE, 'utf8');
+    if (!raw.trim()) return structuredClone(DEFAULT_DATA);
+    return JSON.parse(raw);
   } catch (error) {
     fs.writeFileSync(DATA_FILE, JSON.stringify(DEFAULT_DATA, null, 2));
     return structuredClone(DEFAULT_DATA);
   }
-};
-
-const dataStore = safeRead();
-
-let pgClient = null;
-if (process.env.DATABASE_URL) {
-  pgClient = new Client({ connectionString: process.env.DATABASE_URL });
-  pgClient.connect().catch((err) => {
-    console.warn('PostgreSQL connection failed, using file-based storage fallback:', err.message);
-    pgClient = null;
-  });
 }
 
-app.use(cors());
-app.use(express.json({ limit: '10mb' }));
+function writeDataStore(data) {
+  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+}
 
-function writeStore() {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(dataStore, null, 2));
+const dataStore = readDataStore();
+let pgClient = null;
+
+async function initPostgres() {
+  if (!process.env.DATABASE_URL) {
+    console.log('PostgreSQL not configured; using JSON file storage.');
+    return null;
+  }
+
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  try {
+    await client.connect();
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        role TEXT NOT NULL,
+        password TEXT NOT NULL,
+        reg_no TEXT
+      );
+      CREATE TABLE IF NOT EXISTS cadets (
+        id TEXT PRIMARY KEY,
+        reg_no TEXT NOT NULL,
+        rank TEXT,
+        name TEXT NOT NULL,
+        dept TEXT,
+        year TEXT,
+        platoon TEXT,
+        phone TEXT
+      );
+      CREATE TABLE IF NOT EXISTS nrs (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        type TEXT,
+        venue TEXT,
+        from_date TEXT,
+        to_date TEXT,
+        time TEXT,
+        status TEXT,
+        created_by TEXT,
+        created_at BIGINT
+      );
+      CREATE TABLE IF NOT EXISTS letters (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        event TEXT,
+        date TEXT,
+        venue TEXT,
+        status TEXT,
+        created_by TEXT,
+        created_at BIGINT
+      );
+      CREATE TABLE IF NOT EXISTS attendance (
+        id TEXT PRIMARY KEY,
+        date TEXT,
+        type TEXT,
+        created_by TEXT,
+        created_at BIGINT
+      );
+      CREATE TABLE IF NOT EXISTS volunteer (
+        id TEXT PRIMARY KEY,
+        event TEXT,
+        date TEXT,
+        hours REAL,
+        role TEXT,
+        user_id TEXT,
+        user_name TEXT,
+        verified BOOLEAN,
+        created_at BIGINT
+      );
+      CREATE TABLE IF NOT EXISTS finance (
+        id TEXT PRIMARY KEY,
+        type TEXT,
+        category TEXT,
+        amount REAL,
+        reference TEXT,
+        created_by TEXT,
+        created_at BIGINT
+      );
+      CREATE TABLE IF NOT EXISTS drive (
+        id TEXT PRIMARY KEY,
+        title TEXT,
+        category TEXT,
+        uploaded_by TEXT,
+        created_at BIGINT
+      );
+      CREATE TABLE IF NOT EXISTS activity (
+        id TEXT PRIMARY KEY,
+        type TEXT,
+        text TEXT,
+        timestamp BIGINT,
+        user_name TEXT
+      );
+    `);
+
+    pgClient = client;
+    console.log('PostgreSQL connected successfully.');
+  } catch (error) {
+    console.warn('PostgreSQL connection failed, falling back to file storage.');
+    console.warn(error.message);
+  }
+}
+
+function uid(prefix = 'id') {
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
 }
 
 function issueToken(user) {
@@ -97,37 +193,6 @@ function issueToken(user) {
   );
 }
 
-function authMiddleware(req, res, next) {
-  const authHeader = req.headers.authorization || '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-
-  if (!token) {
-    return res.status(401).json({ message: 'Missing token' });
-  }
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;
-    next();
-  } catch (error) {
-    return res.status(401).json({ message: 'Invalid token' });
-  }
-}
-
-function roleCheck(requiredRoles) {
-  return (req, res, next) => {
-    if (!req.user) return res.status(401).json({ message: 'Unauthorized' });
-    if (!requiredRoles.includes(req.user.role)) {
-      return res.status(403).json({ message: 'Forbidden' });
-    }
-    next();
-  };
-}
-
-function uid(prefix = 'id') {
-  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
-}
-
 function addActivity(type, text, userName) {
   dataStore.activity.unshift({
     id: uid('act'),
@@ -136,11 +201,43 @@ function addActivity(type, text, userName) {
     timestamp: Date.now(),
     user: userName || 'System',
   });
-  writeStore();
+  writeDataStore(dataStore);
 }
 
+function authMiddleware(req, res, next) {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+  if (!token) return res.status(401).json({ message: 'Missing token' });
+
+  try {
+    req.user = jwt.verify(token, JWT_SECRET);
+    next();
+  } catch (error) {
+    return res.status(401).json({ message: 'Invalid token' });
+  }
+}
+
+function roleCheck(roles) {
+  return (req, res, next) => {
+    if (!req.user) return res.status(401).json({ message: 'Unauthorized' });
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    next();
+  };
+}
+
+app.use(cors());
+app.use(express.json({ limit: '10mb' }));
+
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', mode: pgClient ? 'postgres' : 'file', timestamp: Date.now() });
+  res.json({
+    status: 'ok',
+    mode: pgClient ? 'postgres' : 'json-file',
+    timestamp: Date.now(),
+    database: process.env.DATABASE_URL ? 'configured' : 'not-configured',
+  });
 });
 
 app.post('/api/auth/login', (req, res) => {
@@ -175,7 +272,7 @@ app.post('/api/auth/register', authMiddleware, roleCheck(['admin']), (req, res) 
     return res.status(409).json({ message: 'User already exists' });
   }
 
-  const newUser = {
+  const user = {
     id: uid('u'),
     name,
     role,
@@ -183,11 +280,11 @@ app.post('/api/auth/register', authMiddleware, roleCheck(['admin']), (req, res) 
     regNo: role === 'cadet' ? regNo || `TN-${String(dataStore.cadets.length + 1).padStart(2, '0')}` : undefined,
   };
 
-  dataStore.users.push(newUser);
-  writeStore();
-  addActivity('User', `Added ${newUser.name} (${newUser.role})`, req.user.name);
+  dataStore.users.push(user);
+  writeDataStore(dataStore);
+  addActivity('User', `Added ${user.name} (${user.role})`, req.user.name);
 
-  res.status(201).json({ user: { id: newUser.id, name: newUser.name, role: newUser.role, regNo: newUser.regNo || null } });
+  res.status(201).json({ user: { id: user.id, name: user.name, role: user.role, regNo: user.regNo || null } });
 });
 
 app.get('/api/dashboard', authMiddleware, (req, res) => {
@@ -210,31 +307,9 @@ app.get('/api/settings', authMiddleware, (req, res) => {
 
 app.put('/api/settings', authMiddleware, roleCheck(['admin']), (req, res) => {
   dataStore.settings = { ...dataStore.settings, ...req.body };
-  writeStore();
+  writeDataStore(dataStore);
   addActivity('Settings', 'Updated portal settings', req.user.name);
   res.json({ settings: dataStore.settings });
-});
-
-app.post('/api/settings/import', authMiddleware, roleCheck(['admin']), (req, res) => {
-  const imported = req.body;
-  if (!imported || !imported.settings) {
-    return res.status(400).json({ message: 'Invalid backup payload' });
-  }
-
-  dataStore.settings = imported.settings;
-  if (imported.cadets) dataStore.cadets = imported.cadets;
-  if (imported.nrs) dataStore.nrs = imported.nrs;
-  if (imported.letters) dataStore.letters = imported.letters;
-  if (imported.attendance) dataStore.attendance = imported.attendance;
-  if (imported.volunteer) dataStore.volunteer = imported.volunteer;
-  if (imported.finance) dataStore.finance = imported.finance;
-  if (imported.drive) dataStore.drive = imported.drive;
-  if (imported.activity) dataStore.activity = imported.activity;
-  if (imported.users) dataStore.users = imported.users;
-
-  writeStore();
-  addActivity('Settings', 'Imported portal backup', req.user.name);
-  res.json({ message: 'Settings imported successfully', settings: dataStore.settings });
 });
 
 app.get('/api/backup', authMiddleware, roleCheck(['admin']), (req, res) => {
@@ -253,6 +328,30 @@ app.get('/api/backup', authMiddleware, roleCheck(['admin']), (req, res) => {
   res.json(backup);
 });
 
+app.post('/api/settings/import', authMiddleware, roleCheck(['admin']), (req, res) => {
+  const imported = req.body;
+  if (!imported || !imported.settings) {
+    return res.status(400).json({ message: 'Invalid backup payload' });
+  }
+
+  Object.assign(dataStore, {
+    users: imported.users || dataStore.users,
+    cadets: imported.cadets || dataStore.cadets,
+    nrs: imported.nrs || dataStore.nrs,
+    letters: imported.letters || dataStore.letters,
+    attendance: imported.attendance || dataStore.attendance,
+    volunteer: imported.volunteer || dataStore.volunteer,
+    finance: imported.finance || dataStore.finance,
+    drive: imported.drive || dataStore.drive,
+    activity: imported.activity || dataStore.activity,
+    settings: imported.settings || dataStore.settings,
+  });
+
+  writeDataStore(dataStore);
+  addActivity('Settings', 'Imported portal backup', req.user.name);
+  res.json({ message: 'Backup imported successfully', settings: dataStore.settings });
+});
+
 app.get('/api/cadets', authMiddleware, (req, res) => {
   res.json({ cadets: dataStore.cadets });
 });
@@ -260,7 +359,7 @@ app.get('/api/cadets', authMiddleware, (req, res) => {
 app.post('/api/cadets', authMiddleware, roleCheck(['admin', 'senior']), (req, res) => {
   const cadet = { id: uid('c'), ...req.body };
   dataStore.cadets.push(cadet);
-  writeStore();
+  writeDataStore(dataStore);
   addActivity('Cadet', `Added cadet ${cadet.name}`, req.user.name);
   res.status(201).json({ cadet });
 });
@@ -270,13 +369,13 @@ app.put('/api/cadets/:id', authMiddleware, roleCheck(['admin', 'senior']), (req,
   if (index === -1) return res.status(404).json({ message: 'Cadet not found' });
 
   dataStore.cadets[index] = { ...dataStore.cadets[index], ...req.body };
-  writeStore();
+  writeDataStore(dataStore);
   res.json({ cadet: dataStore.cadets[index] });
 });
 
 app.delete('/api/cadets/:id', authMiddleware, roleCheck(['admin']), (req, res) => {
   dataStore.cadets = dataStore.cadets.filter((c) => c.id !== req.params.id);
-  writeStore();
+  writeDataStore(dataStore);
   res.json({ deleted: true });
 });
 
@@ -287,7 +386,7 @@ app.get('/api/nrs', authMiddleware, (req, res) => {
 app.post('/api/nrs', authMiddleware, roleCheck(['admin', 'senior', 'junior']), (req, res) => {
   const payload = { id: uid('nr'), ...req.body, createdAt: Date.now(), createdBy: req.user.name };
   dataStore.nrs.unshift(payload);
-  writeStore();
+  writeDataStore(dataStore);
   addActivity('NR', `Created NR ${payload.name || 'New Event'}`, req.user.name);
   res.status(201).json({ nr: payload });
 });
@@ -299,7 +398,7 @@ app.get('/api/letters', authMiddleware, (req, res) => {
 app.post('/api/letters', authMiddleware, roleCheck(['admin', 'senior', 'junior']), (req, res) => {
   const payload = { id: uid('letter'), ...req.body, createdAt: Date.now(), createdBy: req.user.name };
   dataStore.letters.unshift(payload);
-  writeStore();
+  writeDataStore(dataStore);
   addActivity('Letter', `Created letter ${payload.name || 'Letter'}`, req.user.name);
   res.status(201).json({ letter: payload });
 });
@@ -311,7 +410,7 @@ app.get('/api/attendance', authMiddleware, (req, res) => {
 app.post('/api/attendance', authMiddleware, roleCheck(['admin', 'senior', 'junior', 'ano']), (req, res) => {
   const payload = { id: uid('attendance'), ...req.body, createdAt: Date.now(), createdBy: req.user.name };
   dataStore.attendance.unshift(payload);
-  writeStore();
+  writeDataStore(dataStore);
   addActivity('Attendance', `Saved ${payload.type || 'session'} for ${payload.date || 'today'}`, req.user.name);
   res.status(201).json({ attendance: payload });
 });
@@ -329,7 +428,7 @@ app.post('/api/volunteer', authMiddleware, roleCheck(['admin', 'senior', 'junior
     createdAt: Date.now(),
   };
   dataStore.volunteer.unshift(payload);
-  writeStore();
+  writeDataStore(dataStore);
   addActivity('Volunteer', `${payload.event || 'Volunteer work'} logged by ${req.user.name}`, req.user.name);
   res.status(201).json({ volunteer: payload });
 });
@@ -341,7 +440,7 @@ app.get('/api/finance', authMiddleware, (req, res) => {
 app.post('/api/finance', authMiddleware, roleCheck(['admin', 'senior', 'ano']), (req, res) => {
   const payload = { id: uid('finance'), ...req.body, createdAt: Date.now(), createdBy: req.user.name };
   dataStore.finance.unshift(payload);
-  writeStore();
+  writeDataStore(dataStore);
   addActivity('Finance', `Saved ${payload.category || 'finance'} entry`, req.user.name);
   res.status(201).json({ finance: payload });
 });
@@ -353,7 +452,7 @@ app.get('/api/drive', authMiddleware, (req, res) => {
 app.post('/api/drive', authMiddleware, roleCheck(['admin', 'senior', 'junior', 'ano', 'cadet']), (req, res) => {
   const payload = { id: uid('drive'), ...req.body, uploadedBy: req.user.name, createdAt: Date.now() };
   dataStore.drive.unshift(payload);
-  writeStore();
+  writeDataStore(dataStore);
   addActivity('Drive', `Uploaded ${payload.title || 'document'}`, req.user.name);
   res.status(201).json({ drive: payload });
 });
@@ -373,18 +472,33 @@ app.get('/api/users', authMiddleware, roleCheck(['admin']), (req, res) => {
 });
 
 app.delete('/api/users/:id', authMiddleware, roleCheck(['admin']), (req, res) => {
-  const before = dataStore.users.length;
+  const countBefore = dataStore.users.length;
   dataStore.users = dataStore.users.filter((u) => u.id !== req.params.id);
-  if (dataStore.users.length === before) {
+  if (dataStore.users.length === countBefore) {
     return res.status(404).json({ message: 'User not found' });
   }
-  writeStore();
+  writeDataStore(dataStore);
   addActivity('User', `Removed user ${req.params.id}`, req.user.name);
   res.json({ deleted: true });
 });
 
-app.listen(PORT, () => {
-  console.log(`NCC portal API running on http://localhost:${PORT}`);
+app.post('/api/admin/reset-demo', authMiddleware, roleCheck(['admin']), (req, res) => {
+  Object.assign(dataStore, structuredClone(DEFAULT_DATA));
+  writeDataStore(dataStore);
+  addActivity('Admin', 'Reset portal demo data', req.user.name);
+  res.json({ message: 'Demo data restored successfully' });
+});
+
+async function startServer() {
+  await initPostgres();
+  app.listen(PORT, () => {
+    console.log(`NCC portal API running on http://localhost:${PORT}`);
+  });
+}
+
+startServer().catch((error) => {
+  console.error('Startup failed:', error);
+  process.exit(1);
 });
 
 module.exports = { app, authMiddleware, roleCheck };

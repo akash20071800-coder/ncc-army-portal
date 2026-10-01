@@ -1,88 +1,60 @@
-CREATE TABLE IF NOT EXISTS users (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  role TEXT NOT NULL,
-  password TEXT NOT NULL,
-  reg_no TEXT
-);
+# NCC Army Wing Portal Backend
 
-CREATE TABLE IF NOT EXISTS cadets (
-  id TEXT PRIMARY KEY,
-  reg_no TEXT NOT NULL,
-  rank TEXT,
-  name TEXT NOT NULL,
-  dept TEXT,
-  year TEXT,
-  platoon TEXT,
-  phone TEXT
-);
+## Quick start
 
-CREATE TABLE IF NOT EXISTS nrs (
-  id TEXT PRIMARY KEY,
-  name TEXT,
-  type TEXT,
-  venue TEXT,
-  from_date TEXT,
-  to_date TEXT,
-  time TEXT,
-  status TEXT,
-  created_by TEXT,
-  created_at BIGINT
-);
+1. Install dependencies:
+   npm install
+2. Copy environment file:
+   cp .env.example .env
+3. Start the API:
+   npm start
 
-CREATE TABLE IF NOT EXISTS letters (
-  id TEXT PRIMARY KEY,
-  name TEXT,
-  event TEXT,
-  date TEXT,
-  venue TEXT,
-  status TEXT,
-  created_by TEXT,
-  created_at BIGINT
-);
+## Default login accounts
+- Admin: `Admin` / `admin123`
+- Senior: `Senior Cadet 1` / `senior123`
+- Junior: `Junior Cadet 1` / `junior123`
+- ANO: `ANO 1` / `ano123`
+- Cadet: `Cadet 01` / `cadet123`
 
-CREATE TABLE IF NOT EXISTS attendance (
-  id TEXT PRIMARY KEY,
-  date TEXT,
-  type TEXT,
-  created_by TEXT,
-  created_at BIGINT
-);
+## Features
+- JWT authentication
+- Role-based access
+- Cadets, NR, letters, attendance, finance, volunteer, drive APIs
+- Settings management and backup import/export
+- PostgreSQL-ready schema with JSON fallback storage
+- Docker support for deployment
 
-CREATE TABLE IF NOT EXISTS volunteer (
-  id TEXT PRIMARY KEY,
-  event TEXT,
-  date TEXT,
-  hours REAL,
-  role TEXT,
-  user_id TEXT,
-  user_name TEXT,
-  verified BOOLEAN,
-  created_at BIGINT
-);
+## Core routes
+- GET `/health`
+- POST `/api/auth/login`
+- POST `/api/auth/register`
+- GET `/api/dashboard`
+- GET `/api/settings`
+- PUT `/api/settings`
+- POST `/api/settings/import`
+- GET `/api/backup`
+- GET `/api/cadets`
+- POST `/api/cadets`
+- PUT `/api/cadets/:id`
+- DELETE `/api/cadets/:id`
+- GET `/api/nrs`
+- POST `/api/nrs`
+- GET `/api/letters`
+- POST `/api/letters`
+- GET `/api/attendance`
+- POST `/api/attendance`
+- GET `/api/volunteer`
+- POST `/api/volunteer`
+- GET `/api/finance`
+- POST `/api/finance`
+- GET `/api/drive`
+- POST `/api/drive`
+- GET `/api/activity`
+- GET `/api/users`
+- DELETE `/api/users/:id`
+- POST `/api/admin/reset-demo`
 
-CREATE TABLE IF NOT EXISTS finance (
-  id TEXT PRIMARY KEY,
-  type TEXT,
-  category TEXT,
-  amount REAL,
-  reference TEXT,
-  created_by TEXT,
-  created_at BIGINT
-);
-
-CREATE TABLE IF NOT EXISTS drive (
-  id TEXT PRIMARY KEY,
-  title TEXT,
-  category TEXT,
-  uploaded_by TEXT,
-  created_at BIGINT
-);
-
-CREATE TABLE IF NOT EXISTS activity (
-  id TEXT PRIMARY KEY,
-  type TEXT,
-  text TEXT,
-  timestamp BIGINT,
-  user_name TEXT
-);
+## Deployment notes
+- Set `DATABASE_URL` in `.env` for PostgreSQL.
+- Set `JWT_SECRET` for authentication security.
+- Deploy behind a public host like Render, Railway, or Docker-based hosting.
