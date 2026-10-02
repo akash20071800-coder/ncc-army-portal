@@ -3,7 +3,7 @@
 This repository contains a working starter portal for the NCC Army Wing Anna University concept.
 
 Features included:
-- Login screen with Admin / Senior / Junior / ANO / Cadet roles
+- Login screen with Admin / 3rd Year / 2nd Year / ANO
 - Dashboard
 - Create NR flow
 - Letters module
